@@ -1,176 +1,90 @@
---[[
-    🎹 PIANO TILES - AUTO PLAY
-    Local: StarterGui (dentro de um ScreenGui seu)
-    Tipo: LocalScript
-    
-    Como usar:
-    1. Crie um ScreenGui no StarterGui
-    2. Insira este LocalScript dentro dele
-    3. Ajuste AUTO_PLAY / CLICK_DELAY abaixo
-]]
+-- LocalScript
+-- Coloque em StarterPlayer > StarterPlayerScripts
 
--- =========================
--- SERVIÇOS
--- =========================
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
-local gui = script.Parent
+local playerGui = player:WaitForChild("PlayerGui")
 
--- =========================
--- CONFIGURAÇÃO
--- =========================
-local AUTO_PLAY   = false
-local CLICK_DELAY = 0.03   -- Delay para notas curtas
-local HOLD_TICK   = 0.02   -- Frequência de checagem em notas longas
+-- 1. Referência aos RemoteEvents (Você precisa criá-los no ReplicatedStorage)
+-- Se não existirem, o script vai esperar para sempre.
+local remoteEvents = ReplicatedStorage:WaitForChild("LudoRemotes")
+local rollDiceEvent = remoteEvents:WaitForChild("RollDice")
+local movePieceEvent = remoteEvents:WaitForChild("MovePiece")
 
--- =========================
--- MENU
--- =========================
-local menu = Instance.new("Frame")
-menu.Name = "PianoModMenu"
-menu.Size = UDim2.fromOffset(230, 130)
-menu.Position = UDim2.new(0, 20, 0.5, -65)
-menu.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-menu.BorderSizePixel = 0
-menu.Active = true
-menu.Draggable = true        -- permite arrastar o menu
-menu.Parent = gui
+-- Criação da GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "LudoTestMenu"
+gui.ResetOnSpawn = false
+gui.Parent = playerGui
 
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 12)
-corner.Parent = menu
+local frame = Instance.new("Frame")
+frame.Size = UDim2.fromOffset(220, 250)
+frame.Position = UDim2.new(0, 20, 0.5, -125)
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+frame.BorderSizePixel = 0
+frame.Parent = gui
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 40)
+title.Size = UDim2.new(1, 0, 0, 45)
 title.BackgroundTransparency = 1
-title.Text = "🎹 Piano Tiles"
+title.Text = "LUDO TEST MENU"
 title.TextColor3 = Color3.new(1, 1, 1)
 title.TextSize = 20
 title.Font = Enum.Font.GothamBold
-title.Parent = menu
+title.Parent = frame
 
-local button = Instance.new("TextButton")
-button.Size = UDim2.new(1, -30, 0, 45)
-button.Position = UDim2.fromOffset(15, 55)
-button.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-button.Text = "AUTO PLAY: OFF"
-button.TextColor3 = Color3.new(1, 1, 1)
-button.TextSize = 16
-button.Font = Enum.Font.GothamBold
-button.AutoButtonColor = true
-button.Parent = menu
+local function criarBotao(texto, y)
+	local botao = Instance.new("TextButton")
+	botao.Size = UDim2.new(1, -20, 0, 45)
+	botao.Position = UDim2.fromOffset(10, y)
+	botao.BackgroundColor3 = Color3.fromRGB(55, 110, 230)
+	botao.TextColor3 = Color3.new(1, 1, 1)
+	botao.TextSize = 16
+	botao.Font = Enum.Font.GothamBold
+	botao.Text = texto
+	botao.Parent = frame
+	return botao
+end
 
-local buttonCorner = Instance.new("UICorner")
-buttonCorner.CornerRadius = UDim.new(0, 8)
-buttonCorner.Parent = button
+local autoRoll = false
+local autoMove = false
 
--- Rastro/Status do botão
-local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1, 0, 0, 20)
-status.Position = UDim2.fromOffset(0, 105)
-status.BackgroundTransparency = 1
-status.Text = "Aguardando notas..."
-status.TextColor3 = Color3.fromRGB(180, 180, 180)
-status.TextSize = 12
-status.Font = Enum.Font.Gotham
-status.Parent = menu
+local rollButton = criarBotao("AUTO ROLL: OFF", 55)
+local moveButton = criarBotao("AUTO MOVE: OFF", 110)
+local testButton = criarBotao("TESTAR JOGADA", 165)
 
--- =========================
--- TOGGLE
--- =========================
-button.MouseButton1Click:Connect(function()
-    AUTO_PLAY = not AUTO_PLAY
+-- 2. Lógica do Botão de Rolar
+rollButton.Activated:Connect(function()
+	autoRoll = not autoRoll
+	rollButton.Text = "AUTO ROLL: " .. (autoRoll and "ON" or "OFF")
 
-    if AUTO_PLAY then
-        button.Text = "AUTO PLAY: ON"
-        button.BackgroundColor3 = Color3.fromRGB(40, 170, 80)
-        status.Text = "Auto Play ativado ✅"
-    else
-        button.Text = "AUTO PLAY: OFF"
-        button.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-        status.Text = "Auto Play desativado ❌"
-    end
+	if autoRoll then
+		-- Aqui você pode colocar um loop (task.spawn) para rolar automaticamente
+		-- Por enquanto, apenas simula o clique uma vez:
+		print("Solicitando rolagem de dado ao servidor...")
+		rollDiceEvent:FireServer() -- Envia o comando para o servidor rolar o dado
+	end
 end)
 
--- =========================
--- TOCAR NOTA
--- =========================
-local function tocarNota(nota)
-    if not AUTO_PLAY then return end
-    if not nota or not nota.Parent then return end
-    if not nota:IsA("GuiObject") then return end
+-- 3. Lógica do Botão de Mover
+moveButton.Activated:Connect(function()
+	autoMove = not autoMove
+	moveButton.Text = "AUTO MOVE: " .. (autoMove and "ON" or "OFF")
+	
+	if autoMove then
+		print("Solicitando movimento automático de peça...")
+		-- O ideal é que o servidor escolha a melhor peça baseada no dado atual
+		-- Aqui mandamos um comando genérico para o servidor mover a peça
+		movePieceEvent:FireServer() 
+	end
+end)
 
-    local duracao = nota:GetAttribute("Duration") or 0
-
-    -- Segurança: limita duração máxima para não travar
-    if typeof(duracao) == "number" and duracao > 10 then
-        duracao = 10
-    end
-
-    if duracao <= 0 then
-        -- Nota curta
-        nota:SetAttribute("Pressed", true)
-        task.wait(CLICK_DELAY)
-
-        if nota.Parent then
-            nota:SetAttribute("Pressed", false)
-        end
-    else
-        -- Nota longa: pressiona e mantém
-        nota:SetAttribute("Pressed", true)
-
-        local elapsed = 0
-        while AUTO_PLAY and nota.Parent and elapsed < duracao do
-            task.wait(HOLD_TICK)
-            elapsed += HOLD_TICK
-        end
-
-        if nota.Parent then
-            nota:SetAttribute("Pressed", false)
-        end
-    end
-end
-
--- =========================
--- MONITOR DE NOTAS
--- =========================
-local notasMonitoradas = {}
-
-local function monitorarNota(obj)
-    if not obj:IsA("GuiObject") then return end
-    if obj:GetAttribute("PianoTile") ~= true then return end
-    if notasMonitoradas[obj] then return end
-
-    notasMonitoradas[obj] = true
-
-    task.spawn(function()
-        while obj.Parent do
-            if AUTO_PLAY and not obj:GetAttribute("Played") then
-                obj:SetAttribute("Played", true)
-
-                tocarNota(obj)
-
-                task.wait(0.02)
-
-                if obj.Parent then
-                    obj:SetAttribute("Played", false)
-                end
-            end
-
-            task.wait(0.01)
-        end
-
-        notasMonitoradas[obj] = nil
-    end)
-end
-
--- =========================
--- INICIALIZAÇÃO
--- =========================
-for _, obj in ipairs(gui:GetDescendants()) do
-    monitorarNota(obj)
-end
-
-gui.DescendantAdded:Connect(monitorarNota)
+-- 4. Botão de Teste (Isso é ótimo para debug)
+testButton.Activated:Connect(function()
+	print("TESTE MANUAL: Rolar dado e mover peça imediatamente.")
+	rollDiceEvent:FireServer()
+	task.wait(1) -- Espera 1 segundo para o dado "rolar"
+	movePieceEvent:FireServer()
+end)

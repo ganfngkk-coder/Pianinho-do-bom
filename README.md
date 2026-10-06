@@ -1,90 +1,66 @@
--- LocalScript
--- Coloque em StarterPlayer > StarterPlayerScripts
-
+-- Piano Tiles Auto Player (corrigido)
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
 local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+local PlayerGui = player:WaitForChild("PlayerGui")
 
--- 1. Referência aos RemoteEvents (Você precisa criá-los no ReplicatedStorage)
--- Se não existirem, o script vai esperar para sempre.
-local remoteEvents = ReplicatedStorage:WaitForChild("LudoRemotes")
-local rollDiceEvent = remoteEvents:WaitForChild("RollDice")
-local movePieceEvent = remoteEvents:WaitForChild("MovePiece")
+local AUTO = false
 
--- Criação da GUI
-local gui = Instance.new("ScreenGui")
-gui.Name = "LudoTestMenu"
-gui.ResetOnSpawn = false
-gui.Parent = playerGui
+-- ... (painel igual ao seu) ...
 
-local frame = Instance.new("Frame")
-frame.Size = UDim2.fromOffset(220, 250)
-frame.Position = UDim2.new(0, 20, 0.5, -125)
-frame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-frame.BorderSizePixel = 0
-frame.Parent = gui
-
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 45)
-title.BackgroundTransparency = 1
-title.Text = "LUDO TEST MENU"
-title.TextColor3 = Color3.new(1, 1, 1)
-title.TextSize = 20
-title.Font = Enum.Font.GothamBold
-title.Parent = frame
-
-local function criarBotao(texto, y)
-	local botao = Instance.new("TextButton")
-	botao.Size = UDim2.new(1, -20, 0, 45)
-	botao.Position = UDim2.fromOffset(10, y)
-	botao.BackgroundColor3 = Color3.fromRGB(55, 110, 230)
-	botao.TextColor3 = Color3.new(1, 1, 1)
-	botao.TextSize = 16
-	botao.Font = Enum.Font.GothamBold
-	botao.Text = texto
-	botao.Parent = frame
-	return botao
+-- Detecta tiles: aceita GuiButton OU Frame com tamanho grande
+local function isTile(obj)
+    if not (obj:IsA("GuiButton") or obj:IsA("Frame")) then return false end
+    if not obj.Visible then return false end
+    local s = obj.AbsoluteSize
+    if s.X < 20 or s.Y < 20 then return false end
+    -- Aceita escuro OU qualquer coisa que pareça tile (ajuste aqui)
+    local c = obj.BackgroundColor3
+    return (c.R + c.G + c.B) / 3 < 0.35
 end
 
-local autoRoll = false
-local autoMove = false
+local function fireMouse(tile, state)
+    local pos = tile.AbsolutePosition + tile.AbsoluteSize / 2
+    local inp = {
+        UserInputType = Enum.UserInputType.MouseButton1,
+        UserInputState = state,
+        Position = Vector3.new(pos.X, pos.Y, 0),
+    }
+    -- Dispara no tile e em descendentes
+    for _, o in ipairs({tile, table.unpack(tile:GetDescendants())}) do
+        if o:IsA("GuiObject") then
+            for _, evName in ipairs({"InputBegan", "InputEnded", "MouseButton1Down", "MouseButton1Up"}) do
+                local ev = o[evName]
+                if ev then pcall(function() ev:Fire(inp) end) end
+            end
+        end
+    end
+end
 
-local rollButton = criarBotao("AUTO ROLL: OFF", 55)
-local moveButton = criarBotao("AUTO MOVE: OFF", 110)
-local testButton = criarBotao("TESTAR JOGADA", 165)
+local function playTile(tile)
+    if not tile.Parent or not tile.Visible then return end
 
--- 2. Lógica do Botão de Rolar
-rollButton.Activated:Connect(function()
-	autoRoll = not autoRoll
-	rollButton.Text = "AUTO ROLL: " .. (autoRoll and "ON" or "OFF")
+    fireMouse(tile, Enum.UserInputState.Begin)
 
-	if autoRoll then
-		-- Aqui você pode colocar um loop (task.spawn) para rolar automaticamente
-		-- Por enquanto, apenas simula o clique uma vez:
-		print("Solicitando rolagem de dado ao servidor...")
-		rollDiceEvent:FireServer() -- Envia o comando para o servidor rolar o dado
-	end
-end)
+    local hold = math.clamp(tile.AbsoluteSize.Y / 180, 0.08, 3)
+    if hold > 0.2 then
+        task.wait(hold)
+    end
 
--- 3. Lógica do Botão de Mover
-moveButton.Activated:Connect(function()
-	autoMove = not autoMove
-	moveButton.Text = "AUTO MOVE: " .. (autoMove and "ON" or "OFF")
-	
-	if autoMove then
-		print("Solicitando movimento automático de peça...")
-		-- O ideal é que o servidor escolha a melhor peça baseada no dado atual
-		-- Aqui mandamos um comando genérico para o servidor mover a peça
-		movePieceEvent:FireServer() 
-	end
-end)
+    fireMouse(tile, Enum.UserInputState.End)
+end
 
--- 4. Botão de Teste (Isso é ótimo para debug)
-testButton.Activated:Connect(function()
-	print("TESTE MANUAL: Rolar dado e mover peça imediatamente.")
-	rollDiceEvent:FireServer()
-	task.wait(1) -- Espera 1 segundo para o dado "rolar"
-	movePieceEvent:FireServer()
+task.spawn(function()
+    while task.wait(0.03) do
+        if AUTO then
+            for _, obj in ipairs(PlayerGui:GetDescendants()) do
+                if isTile(obj) then
+                    local t = obj:GetAttribute("LastAutoHit")
+                    if not t or tick() - t > 0.3 then
+                        obj:SetAttribute("LastAutoHit", tick())
+                        task.spawn(playTile, obj)
+                    end
+                end
+            end
+        end
+    end
 end)
